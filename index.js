@@ -1,48 +1,46 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { OpenAI } = require('openai');
+const { Configuration, OpenAIApi } = require('openai');
+require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 10000;
-
-// Substitua pela sua chave da OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'SUA_CHAVE_API_AQUI',
-});
-
 app.use(bodyParser.json());
 
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY, // sua chave API no arquivo .env
+});
+
+const openai = new OpenAIApi(configuration);
+
 app.post('/webhook', async (req, res) => {
-  const userMessage = req.body.queryResult.queryText;
+  const prompt = req.body.queryResult.queryText;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    const completion = await openai.createChatCompletion({
+      model: "gpt-4o", // <- modelo atualizado
       messages: [
         {
-          role: 'system',
-          content: 'Você é um assistente especializado em vendas da empresa Real Carnes.',
+          role: "system",
+          content: "Você é um assistente de vendas do frigorífico Real Carnes. Responda de forma clara, objetiva e com simpatia.",
         },
         {
-          role: 'user',
-          content: userMessage,
+          role: "user",
+          content: prompt,
         },
       ],
     });
 
-    const botReply = completion.choices[0].message.content;
+    const resposta = completion.data.choices[0].message.content;
+    res.json({ fulfillmentText: resposta });
 
-    return res.json({
-      fulfillmentText: botReply,
-    });
   } catch (error) {
-    console.error('Erro ao acessar a API da OpenAI:', error.response?.data || error.message);
-    return res.json({
-      fulfillmentText: 'Desculpe, houve um erro ao processar sua solicitação.',
-    });
+    console.error('Erro no webhook:', error.response?.data || error.message);
+    res.json({ fulfillmentText: "Desculpe, houve um erro ao processar sua solicitação." });
   }
 });
 
-app.listen(port, () => {
-  console.log(`Servidor webhook rodando na porta ${port}`);
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Servidor webhook rodando na porta ${PORT}`);
 });
+Atualiza para usar o modelo gpt-4o
