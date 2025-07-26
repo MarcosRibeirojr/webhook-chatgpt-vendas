@@ -1,15 +1,16 @@
 {
   "name": "webhook-chatgpt-vendas",
   "version": "1.0.0",
+  "description": "Webhook com ChatGPT integrado ao Dialogflow",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "openai": "^4.27.0",
-    "body-parser": "^1.20.2",
-    "dotenv": "^16.3.1"
+    "openai": "^4.25.1"
+  },
+  "engines": {
+    "node": ">=16"
   }
 }
