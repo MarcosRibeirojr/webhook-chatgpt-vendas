@@ -43,4 +43,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Servidor webhook rodando na porta ${PORT}`);
 });
-Atualiza para usar o modelo gpt-4o
