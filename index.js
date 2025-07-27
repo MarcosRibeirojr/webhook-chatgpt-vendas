@@ -1,43 +1,45 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { SessionsClient } = require('@google-cloud/dialogflow');
+const { OpenAI } = require('openai');
+
 const app = express();
+const port = process.env.PORT || 10000;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 app.use(bodyParser.json());
 
-const projectId = 'representante1';
-
-const sessionClient = new SessionsClient();
-
 app.post('/webhook', async (req, res) => {
+  const queryText = req.body.queryResult.queryText;
+  console.log('Pergunta recebida do Dialogflow:', queryText);
+
   try {
-    const sessionId = req.body.From || 'default-session';
-    const sessionPath = sessionClient.projectAgentSessionPath(projectId, sessionId);
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'Você é um atendente de vendas da Real Carnes, especializado em produtos suínos. Responda de forma objetiva e simpática.' },
+        { role: 'user', content: queryText },
+      ],
+      temperature: 0.6,
+    });
 
-    const request = {
-      session: sessionPath,
-      queryInput: {
-        text: {
-          text: req.body.Body,
-          languageCode: 'pt-BR',
-        },
-      },
-    };
+    const responseText = completion.choices[0].message.content;
+    console.log('Resposta da IA:', responseText);
 
-    const responses = await sessionClient.detectIntent(request);
-    const result = responses[0].queryResult;
+    return res.json({
+      fulfillmentText: responseText,
+    });
 
-    const fulfillmentText = result.fulfillmentText || 'Desculpe, não entendi sua pergunta. Pode repetir?';
-
-    res.set('Content-Type', 'application/json');
-    return res.send({ fulfillmentText });
   } catch (error) {
-    console.error('Erro no webhook:', error);
-    return res.send({ fulfillmentText: 'Houve um erro ao processar sua mensagem.' });
+    console.error('Erro ao gerar resposta da IA:', error);
+    return res.json({
+      fulfillmentText: 'Desculpe, estou com dificuldades técnicas no momento.',
+    });
   }
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+app.listen(port, () => {
+  console.log(`Servidor rodando na porta ${port}`);
 });
