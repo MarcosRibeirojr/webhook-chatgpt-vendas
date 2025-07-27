@@ -1,6 +1,10 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
+require('dotenv').config(); // Carrega as variáveis do .env
+
+// Teste para verificar se a API Key foi carregada corretamente
+console.log("API KEY carregada:", process.env.OPENAI_API_KEY);
 
 const app = express();
 const port = process.env.PORT || 10000;
@@ -21,31 +25,24 @@ app.post('/webhook', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content:
-            'Você é um atendente de vendas da Real Carnes, especialista em produtos suínos como tolcinho, linguiça e defumados. Responda de forma objetiva, simpática e sempre com foco em vender ou orientar bem o cliente.',
+          content: 'Você é um assistente de vendas do frigorífico Real Carnes. Responda de forma clara, objetiva e com simpatia.',
         },
         {
           role: 'user',
           content: queryText,
         },
       ],
-      temperature: 0.6,
     });
 
-    const responseText = completion.choices[0].message.content;
-    console.log('Resposta da IA:', responseText);
+    const resposta = completion.choices[0].message.content;
+    res.json({ fulfillmentText: resposta });
 
-    res.json({
-      fulfillmentText: responseText,
-    });
   } catch (error) {
-    console.error('Erro na IA:', error);
-    res.json({
-      fulfillmentText: 'Desculpe, houve um problema técnico ao responder.',
-    });
+    console.error('Erro no webhook:', error.response?.data || error.message);
+    res.json({ fulfillmentText: "Desculpe, houve um erro ao processar sua solicitação." });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Servidor rodando na porta ${port}`);
+  console.log(`Servidor webhook rodando na porta ${port}`);
 });
