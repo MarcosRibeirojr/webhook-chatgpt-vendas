@@ -1,24 +1,58 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const axios = require('axios');
+require('dotenv').config();
+
 const app = express();
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
-app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.post('/webhook', async (req, res) => {
+  console.log('BODY RECEBIDO:', req.body);
 
-app.post('/webhook', (req, res) => {
-  console.log("BODY RECEBIDO:", JSON.stringify(req.body, null, 2));
+  const message = req.body.Body;
+  const sender = req.body.From;
 
-  const intentName = req.body?.queryResult?.intent?.displayName || 'Indefinido';
-
-  if (intentName === "Teste ChatGPT") {
-    return res.json({
-      fulfillmentText: 'Sim, temos tolcinho gordo disponível! É ideal para dar sabor aos pratos e tem excelente rendimento.'
-    });
+  if (!message || !sender) {
+    return res.status(400).send('Dados inválidos');
   }
 
-  return res.json({
-    fulfillmentText: 'Desculpe, não entendi sua pergunta. Pode repetir?'
-  });
+  try {
+    const dialogflowResponse = await axios.post(
+      'https://dialogflow.googleapis.com/v2/projects/SEU_PROJECT_ID/agent/sessions/123456789:detectIntent',
+      {
+        queryInput: {
+          text: {
+            text: message,
+            languageCode: 'pt-BR',
+          }
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.DIALOGFLOW_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const fulfillmentText = dialogflowResponse.data.queryResult.fulfillmentText;
+
+    res.set('Content-Type', 'text/xml');
+    res.send(`
+      <Response>
+        <Message>${fulfillmentText}</Message>
+      </Response>
+    `);
+  } catch (error) {
+    console.error('Erro ao se comunicar com o Dialogflow:', error.response?.data || error.message);
+    res.set('Content-Type', 'text/xml');
+    res.send(`
+      <Response>
+        <Message>Erro ao responder. Tente novamente mais tarde.</Message>
+      </Response>
+    `);
+  }
 });
 
 const PORT = process.env.PORT || 10000;
