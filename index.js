@@ -1,25 +1,23 @@
-require('dotenv').config(); // Carrega as variáveis do .env
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const { Configuration, OpenAIApi } = require('openai');
+const OpenAI = require('openai'); // novo formato
 
 const app = express();
 app.use(bodyParser.json());
 
-console.log("API KEY carregada:", process.env.OPENAI_API_KEY); // Teste
+console.log("API KEY carregada:", process.env.OPENAI_API_KEY); // teste
 
-const configuration = new Configuration({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-const openai = new OpenAIApi(configuration);
 
 app.post('/webhook', async (req, res) => {
   const prompt = req.body.queryResult.queryText;
   console.log('Pergunta recebida do Dialogflow:', prompt);
 
   try {
-    const completion = await openai.createChatCompletion({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -33,7 +31,7 @@ app.post('/webhook', async (req, res) => {
       ],
     });
 
-    const resposta = completion.data.choices[0].message.content;
+    const resposta = completion.choices[0].message.content;
     res.json({ fulfillmentText: resposta });
 
   } catch (error) {
