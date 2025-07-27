@@ -6,9 +6,9 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.post('/webhook', (req, res) => {
-  const intentName = req.body.queryResult.intent.displayName;
+  console.log("BODY RECEBIDO:", JSON.stringify(req.body, null, 2));
 
-  console.log("INTENÇÃO RECEBIDA:", intentName);
+  const intentName = req.body?.queryResult?.intent?.displayName || 'Indefinido';
 
   if (intentName === "Teste ChatGPT") {
     return res.json({
