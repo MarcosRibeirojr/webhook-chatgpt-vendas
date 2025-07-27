@@ -19,8 +19,15 @@ app.post('/webhook', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: 'Você é um atendente de vendas da Real Carnes, especializado em produtos suínos. Responda de forma objetiva e simpática.' },
-        { role: 'user', content: queryText },
+        {
+          role: 'system',
+          content:
+            'Você é um atendente de vendas da Real Carnes, especialista em produtos suínos como tolcinho, linguiça e defumados. Responda de forma objetiva, simpática e sempre com foco em vender ou orientar bem o cliente.',
+        },
+        {
+          role: 'user',
+          content: queryText,
+        },
       ],
       temperature: 0.6,
     });
@@ -28,14 +35,13 @@ app.post('/webhook', async (req, res) => {
     const responseText = completion.choices[0].message.content;
     console.log('Resposta da IA:', responseText);
 
-    return res.json({
+    res.json({
       fulfillmentText: responseText,
     });
-
   } catch (error) {
-    console.error('Erro ao gerar resposta da IA:', error);
-    return res.json({
-      fulfillmentText: 'Desculpe, estou com dificuldades técnicas no momento.',
+    console.error('Erro na IA:', error);
+    res.json({
+      fulfillmentText: 'Desculpe, houve um problema técnico ao responder.',
     });
   }
 });
