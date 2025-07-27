@@ -1,57 +1,39 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const axios = require('axios');
-require('dotenv').config();
-
+const { SessionsClient } = require('@google-cloud/dialogflow');
 const app = express();
-app.use(bodyParser.urlencoded({ extended: false }));
+
 app.use(bodyParser.json());
 
+const projectId = 'representante1';
+
+const sessionClient = new SessionsClient();
+
 app.post('/webhook', async (req, res) => {
-  console.log('BODY RECEBIDO:', req.body);
-
-  const message = req.body.Body;
-  const sender = req.body.From;
-
-  if (!message || !sender) {
-    return res.status(400).send('Dados inválidos');
-  }
-
   try {
-    const dialogflowResponse = await axios.post(
-      'https://dialogflow.googleapis.com/v2/projects/SEU_PROJECT_ID/agent/sessions/123456789:detectIntent',
-      {
-        queryInput: {
-          text: {
-            text: message,
-            languageCode: 'pt-BR',
-          }
-        }
+    const sessionId = req.body.From || 'default-session';
+    const sessionPath = sessionClient.projectAgentSessionPath(projectId, sessionId);
+
+    const request = {
+      session: sessionPath,
+      queryInput: {
+        text: {
+          text: req.body.Body,
+          languageCode: 'pt-BR',
+        },
       },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.DIALOGFLOW_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    };
 
-    const fulfillmentText = dialogflowResponse.data.queryResult.fulfillmentText;
+    const responses = await sessionClient.detectIntent(request);
+    const result = responses[0].queryResult;
 
-    res.set('Content-Type', 'text/xml');
-    res.send(`
-      <Response>
-        <Message>${fulfillmentText}</Message>
-      </Response>
-    `);
+    const fulfillmentText = result.fulfillmentText || 'Desculpe, não entendi sua pergunta. Pode repetir?';
+
+    res.set('Content-Type', 'application/json');
+    return res.send({ fulfillmentText });
   } catch (error) {
-    console.error('Erro ao se comunicar com o Dialogflow:', error.response?.data || error.message);
-    res.set('Content-Type', 'text/xml');
-    res.send(`
-      <Response>
-        <Message>Erro ao responder. Tente novamente mais tarde.</Message>
-      </Response>
-    `);
+    console.error('Erro no webhook:', error);
+    return res.send({ fulfillmentText: 'Houve um erro ao processar sua mensagem.' });
   }
 });
 
