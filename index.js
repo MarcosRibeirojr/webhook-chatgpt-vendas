@@ -1,40 +1,39 @@
+require('dotenv').config(); // Carrega as variáveis do .env
 const express = require('express');
 const bodyParser = require('body-parser');
-const { OpenAI } = require('openai');
-require('dotenv').config(); // Carrega as variáveis do .env
-
-// Teste para verificar se a API Key foi carregada corretamente
-console.log("API KEY carregada:", process.env.OPENAI_API_KEY);
+const { Configuration, OpenAIApi } = require('openai');
 
 const app = express();
-const port = process.env.PORT || 10000;
+app.use(bodyParser.json());
 
-const openai = new OpenAI({
+console.log("API KEY carregada:", process.env.OPENAI_API_KEY); // Teste
+
+const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-app.use(bodyParser.json());
+const openai = new OpenAIApi(configuration);
 
 app.post('/webhook', async (req, res) => {
-  const queryText = req.body.queryResult.queryText;
-  console.log('Pergunta recebida do Dialogflow:', queryText);
+  const prompt = req.body.queryResult.queryText;
+  console.log('Pergunta recebida do Dialogflow:', prompt);
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    const completion = await openai.createChatCompletion({
+      model: "gpt-4o",
       messages: [
         {
-          role: 'system',
-          content: 'Você é um assistente de vendas do frigorífico Real Carnes. Responda de forma clara, objetiva e com simpatia.',
+          role: "system",
+          content: "Você é um assistente de vendas do frigorífico Real Carnes. Responda de forma clara, objetiva e com simpatia.",
         },
         {
-          role: 'user',
-          content: queryText,
+          role: "user",
+          content: prompt,
         },
       ],
     });
 
-    const resposta = completion.choices[0].message.content;
+    const resposta = completion.data.choices[0].message.content;
     res.json({ fulfillmentText: resposta });
 
   } catch (error) {
@@ -43,6 +42,7 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Servidor webhook rodando na porta ${port}`);
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Servidor webhook rodando na porta ${PORT}`);
 });
