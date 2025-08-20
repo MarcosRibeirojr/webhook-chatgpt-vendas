@@ -1,34 +1,36 @@
+// index.js
 require('dotenv').config();
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
 const { twiml: { MessagingResponse } } = require('twilio');
 
 const app = express();
-const PORT = process.env.PORT || 10000; // Render usa porta dinâmica
 
-// Configuração OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// ====== CONFIGURAÇÕES ======
+const PORT = process.env.PORT || 10000; // Porta fixa
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Middlewares
+// ====== MIDDLEWARES ======
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ====== Memória de conversas por usuário ======
+// ====== MEMÓRIA DAS CONVERSAS POR CLIENTE ======
 const historicoConversas = {};
 
-// ====== Função para gerar resposta do GPT com histórico ======
+// ====== FUNÇÃO: GERA RESPOSTA USANDO GPT ======
 async function gerarResposta(numeroCliente, mensagemUsuario) {
+  console.log(`📝 [IA] Gerando resposta para ${numeroCliente}: "${mensagemUsuario}"`);
+
   if (!historicoConversas[numeroCliente]) {
     historicoConversas[numeroCliente] = [
       {
         role: 'system',
         content:
-          'Você é um atendente de vendas da Real Carnes. Especialista em produtos suínos (tolcinho, linguiça, defumados). \
-Responda de forma simpática, objetiva e sempre buscando vender ou sugerir produtos complementares. \
-Se possível, sugira promoções e combos. Lembre-se do histórico do cliente.'
+          'Você é um atendente de vendas da Real Carnes. Especialista em produtos suínos (torresmo, linguiças, defumados). ' +
+          'Responda de forma simpática, objetiva e sempre buscando vender ou sugerir produtos complementares. ' +
+          'Se possível, sugira promoções e combos. Considere o histórico do cliente.'
       }
     ];
   }
@@ -40,57 +42,84 @@ Se possível, sugira promoções e combos. Lembre-se do histórico do cliente.'
     historicoConversas[numeroCliente] = historicoConversas[numeroCliente].slice(-20);
   }
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: historicoConversas[numeroCliente],
-    temperature: 0.7,
-  });
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: historicoConversas[numeroCliente],
+      temperature: 0.7,
+    });
 
-  const resposta = completion.choices[0].message.content;
-  historicoConversas[numeroCliente].push({ role: 'assistant', content: resposta });
+    const resposta = completion.choices?.[0]?.message?.content || 'Tudo certo por aqui! Como posso ajudar?';
+    historicoConversas[numeroCliente].push({ role: 'assistant', content: resposta });
 
-  return resposta;
+    console.log(`✅ [IA] Resposta gerada para ${numeroCliente}: "${resposta}"`);
+    return resposta;
+  } catch (err) {
+    console.error('❌ [IA] Erro ao gerar resposta:', err?.message || err);
+    return 'Desculpe, houve um problema com a IA no momento.';
+  }
 }
 
-// ====== ENDPOINT 1: Dialogflow Webhook ======
-app.post('/webhook', async (req, res) => {
-  console.log('Corpo recebido do Dialogflow:', req.body);
+// ====== ROTA DE SAÚDE (opcional, para você testar no navegador) ======
+app.get('/health', (req, res) => {
+  res.status(200).send('ok');
+});
 
-  const queryText = req.body.queryResult?.queryText || '';
-  const sessionId = req.body.session || 'sessao_desconhecida';
+// ====== WEBHOOK DO DIALOGFLOW (se você usa) ======
+app.post('/webhook', async (req, res) => {
+  console.log('🌐 [Dialogflow] Corpo recebido:', req.body);
+
+  const queryText = req.body?.queryResult?.queryText || '';
+  const sessionId = req.body?.session || 'sessao_desconhecida';
 
   if (!queryText) {
+    console.warn('⚠️ [Dialogflow] Mensagem vazia recebida');
     return res.json({ fulfillmentText: 'Não entendi sua pergunta. Pode repetir?' });
   }
 
   try {
     const resposta = await gerarResposta(sessionId, queryText);
-    console.log('Resposta da IA (Dialogflow):', resposta);
-
+    console.log('💬 [Dialogflow] Resposta enviada:', resposta);
     res.json({ fulfillmentText: resposta });
   } catch (error) {
-    console.error('Erro na IA Dialogflow:', error);
+    console.error('❌ [Dialogflow] Erro na IA:', error);
     res.json({ fulfillmentText: 'Desculpe, houve um problema técnico ao responder.' });
   }
 });
 
-// ====== ENDPOINT 2: Twilio WhatsApp com GPT ======
+// ====== WEBHOOK DO TWILIO/WHATSAPP ======
 app.post('/twilio', async (req, res) => {
-  const twiml = new MessagingResponse();
-  const mensagem = req.body.Body || '';
-  const numeroCliente = req.body.From || 'numero_desconhecido';
+  console.log('🌐 [Twilio] Corpo recebido:', req.body);
 
-  console.log('Mensagem recebida do WhatsApp:', mensagem);
+  const twiml = new MessagingResponse();
+  const mensagem = req.body?.Body || '';
+  const numeroCliente = req.body?.From || 'numero_desconhecido';
+
+  if (!mensagem) {
+    console.warn('⚠️ [Twilio] Mensagem vazia recebida');
+    twiml.message('Mensagem vazia recebida. Envie algo para começar.');
+    res.writeHead(200, { 'Content-Type': 'text/xml' });
+    return res.end(twiml.toString());
+  }
+
+  console.log(`💬 [Twilio] Mensagem recebida de ${numeroCliente}: "${mensagem}"`);
 
   try {
+    // Se faltar a chave de API, respondo algo fixo para não quebrar seu fluxo
+    if (!process.env.OPENAI_API_KEY) {
+      twiml.message('Webhook ok ✅ (faltou configurar OPENAI_API_KEY).');
+      res.writeHead(200, { 'Content-Type': 'text/xml' });
+      return res.end(twiml.toString());
+    }
+
     const resposta = await gerarResposta(numeroCliente, mensagem);
-    console.log('Resposta enviada ao WhatsApp:', resposta);
+    console.log(`📤 [Twilio] Resposta enviada para ${numeroCliente}: "${resposta}"`);
 
     twiml.message(resposta);
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(twiml.toString());
   } catch (error) {
-    console.error('Erro no Twilio GPT:', error);
+    console.error('❌ [Twilio] Erro ao processar mensagem:', error);
     twiml.message('Desculpe, houve um problema técnico ao responder sua mensagem.');
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(twiml.toString());
@@ -99,6 +128,5 @@ app.post('/twilio', async (req, res) => {
 
 // ====== INICIALIZAÇÃO DO SERVIDOR ======
 app.listen(PORT, () => {
-  console.log(`✅ Servidor rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
-
